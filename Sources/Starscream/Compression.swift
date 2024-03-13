@@ -56,8 +56,8 @@ class Decompressor {
     }
 
     func decompress(_ data: Data, finish: Bool) throws -> Data {
-        return try data.withUnsafeBytes { (bytes:UnsafePointer<UInt8>) -> Data in
-            return try decompress(bytes: bytes, count: data.count, finish: finish)
+        return try data.withUnsafeBytes { (bytes:UnsafeRawBufferPointer) -> Data in
+            return try decompress(bytes: UnsafePointer<UInt8>.init(OpaquePointer(bytes.baseAddress!)), count: data.count, finish: finish)
         }
     }
 
@@ -80,7 +80,9 @@ class Decompressor {
         strm.avail_in = CUnsignedInt(count)
 
         repeat {
-            strm.next_out = UnsafeMutablePointer<UInt8>(&buffer)
+            
+            strm.next_out = UnsafeMutablePointer<UInt8>.allocate(capacity: buffer.count)
+            strm.next_out.initialize(from: &buffer, count: buffer.count)
             strm.avail_out = CUnsignedInt(buffer.count)
 
             res = inflate(&strm, 0)
@@ -137,12 +139,14 @@ class Compressor {
     func compress(_ data: Data) throws -> Data {
         var compressed = Data()
         var res:CInt = 0
-        data.withUnsafeBytes { (ptr:UnsafePointer<UInt8>) -> Void in
-            strm.next_in = UnsafeMutablePointer<UInt8>(mutating: ptr)
+        data.withUnsafeBytes { (ptr:UnsafeRawBufferPointer) in
+            strm.next_in = UnsafeMutablePointer<UInt8>(mutating: UnsafePointer<UInt8>.init(OpaquePointer(ptr.baseAddress!)))
             strm.avail_in = CUnsignedInt(data.count)
 
             repeat {
-                strm.next_out = UnsafeMutablePointer<UInt8>(&buffer)
+                
+                strm.next_out = UnsafeMutablePointer<UInt8>.allocate(capacity: buffer.count)
+                strm.next_out.initialize(from: &buffer, count: buffer.count)
                 strm.avail_out = CUnsignedInt(buffer.count)
 
                 res = deflate(&strm, Z_SYNC_FLUSH)
@@ -151,7 +155,6 @@ class Compressor {
                 compressed.append(buffer, count: byteCount)
             }
             while res == Z_OK && strm.avail_out == 0
-
         }
 
         guard res == Z_OK && strm.avail_out > 0

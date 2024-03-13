@@ -58,7 +58,7 @@ public struct WSError: Error {
 }
 
 //WebSocketClient is setup to be dependency injection for testing
-public protocol WebSocketClient: class {
+public protocol WebSocketClient: AnyObject {
     var delegate: WebSocketDelegate? {get set}
     var pongDelegate: WebSocketPongDelegate? {get set}
     var disableSSLCertValidation: Bool {get set}
@@ -116,7 +116,7 @@ public struct SSLSettings {
     #endif
 }
 
-public protocol WSStreamDelegate: class {
+public protocol WSStreamDelegate: AnyObject {
     func newBytesInStream()
     func streamDidError(error: Error?)
 }
@@ -279,8 +279,8 @@ open class FoundationStream : NSObject, WSStream, StreamDelegate  {
             var peerNameLen: Int = 0
             SSLGetPeerDomainNameLength(sslContextOut, &peerNameLen)
             var peerName = Data(count: peerNameLen)
-            let _ = peerName.withUnsafeMutableBytes { (peerNamePtr: UnsafeMutablePointer<Int8>) in
-                SSLGetPeerDomainName(sslContextOut, peerNamePtr, &peerNameLen)
+            let _ = peerName.withUnsafeMutableBytes { (peerNamePtr:UnsafeMutableRawBufferPointer) in
+                SSLGetPeerDomainName(sslContextOut, peerNamePtr.baseAddress!, &peerNameLen)
             }
             if let peerDomain = String(bytes: peerName, encoding: .utf8), peerDomain.count > 0 {
                 domain = peerDomain
@@ -310,7 +310,7 @@ open class FoundationStream : NSObject, WSStream, StreamDelegate  {
 //WebSocket implementation
 
 //standard delegate you should use
-public protocol WebSocketDelegate: class {
+public protocol WebSocketDelegate: AnyObject {
     func websocketDidConnect(socket: WebSocketClient)
     func websocketDidDisconnect(socket: WebSocketClient, error: Error?)
     func websocketDidReceiveMessage(socket: WebSocketClient, text: String)
@@ -318,12 +318,12 @@ public protocol WebSocketDelegate: class {
 }
 
 //got pongs
-public protocol WebSocketPongDelegate: class {
+public protocol WebSocketPongDelegate: AnyObject {
     func websocketDidReceivePong(socket: WebSocketClient, data: Data?)
 }
 
 // A Delegate with more advanced info on messages and connection etc.
-public protocol WebSocketAdvancedDelegate: class {
+public protocol WebSocketAdvancedDelegate: AnyObject {
     func websocketDidConnect(socket: WebSocket)
     func websocketDidDisconnect(socket: WebSocket, error: Error?)
     func websocketDidReceiveMessage(socket: WebSocket, text: String, response: WebSocket.WSResponse)
@@ -1323,8 +1323,8 @@ private extension String {
     func sha1Base64() -> String {
         let data = self.data(using: String.Encoding.utf8)!
         var digest = [UInt8](repeating: 0, count:Int(CC_SHA1_DIGEST_LENGTH))
-        data.withUnsafeBytes { _ = CC_SHA1($0, CC_LONG(data.count), &digest) }
-        return Data(bytes: digest).base64EncodedString()
+        data.withUnsafeBytes{ _ = CC_SHA1($0.baseAddress, CC_LONG(data.count), &digest) }
+        return Data(digest).base64EncodedString()
     }
 }
 
